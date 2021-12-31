@@ -123,15 +123,18 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
 
     /* Search in flatten bvh tree */
     std::stack<uint32_t> travelStack;
-    uint32_t nodeIdx = 0;
-    if (m_BVH_nodes[nodeIdx].bbox.rayIntersect(ray)) {
-        travelStack.push(nodeIdx);
-    }
+
+    /* push root index into stack */
+    travelStack.push(0);
     while (!travelStack.empty()) {
         uint32_t curIdx = travelStack.top();
         travelStack.pop();
         const auto& curNode = m_BVH_nodes[curIdx];
         
+        if (!curNode.bbox.rayIntersect(ray)) {
+            continue;
+        }
+
         if (curNode.nPrimitives > 0) {
             for (uint32_t i = 0; i < curNode.nPrimitives; i++) {
                 uint32_t primitiveIdx = m_ordered_indices[curNode.primitivesOffset + i];
@@ -153,11 +156,28 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
             uint32_t leftChildIdx = curIdx + 1;
             uint32_t rightChildIdx = curNode.secondChildOffset;
 
-            if (m_BVH_nodes[leftChildIdx].bbox.rayIntersect(ray)) {
-                travelStack.push(leftChildIdx);
+            float leftNearT, leftFarT, rightNearT, rightFarT;
+            bool leftIntersect = m_BVH_nodes[leftChildIdx].bbox.rayIntersect(ray, leftNearT, leftFarT);
+            bool rightIntersect = m_BVH_nodes[rightChildIdx].bbox.rayIntersect(ray, rightNearT, rightFarT);
+
+            if (leftIntersect && rightIntersect) {
+                if (leftNearT < rightNearT)
+                {
+                    travelStack.push(rightChildIdx);
+                    travelStack.push(leftChildIdx);
+                }
+                else {
+                    travelStack.push(leftChildIdx);
+                    travelStack.push(rightChildIdx);
+                }
             }
-            if (m_BVH_nodes[rightChildIdx].bbox.rayIntersect(ray)) {
-                travelStack.push(rightChildIdx);
+            else {
+                if (leftIntersect) {
+                    travelStack.push(leftChildIdx);
+                }
+                if (rightIntersect) {
+                    travelStack.push(rightChildIdx);
+                }
             }
         }
     }
