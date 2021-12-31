@@ -27,3 +27,4 @@ Debug
 x64
 *.exr
 *.png
+/scenes/pa2/ajax.obj
