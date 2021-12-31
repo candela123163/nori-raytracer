@@ -19,8 +19,44 @@
 #pragma once
 
 #include <nori/mesh.h>
+#include <memory>
 
 NORI_NAMESPACE_BEGIN
+
+/*
+* BVH data structure declaratins
+*/
+struct BVHBuildNode
+{
+    std::unique_ptr<BVHBuildNode> left, right;
+    BoundingBox3f bbox;
+    uint32_t firstPrimOffset = 0, nPrimitives = 0;
+
+    void setLeaf(uint32_t firstPrimOffset_, uint32_t nPrimitives_, BoundingBox3f bbox_) {
+        left = nullptr;
+        right = nullptr;
+        firstPrimOffset = firstPrimOffset_;
+        nPrimitives = nPrimitives_;
+        bbox = bbox_;
+    }
+
+    void setInterior(std::unique_ptr<BVHBuildNode>&& left_, std::unique_ptr<BVHBuildNode>&& right_) {
+        left = std::move(left_);
+        right = std::move(right_);
+        bbox.expandBy(left->bbox);
+        bbox.expandBy(right->bbox);
+    }
+};
+
+struct FlatBVHNode
+{
+    BoundingBox3f bbox;
+    union {
+        uint32_t primitivesOffset;
+        uint32_t secondChildOffset;
+    };
+    uint32_t nPrimitives;   // 0 -> interior node
+};
 
 /**
  * \brief Acceleration data structure for ray intersection queries
@@ -66,8 +102,42 @@ public:
     bool rayIntersect(const Ray3f &ray, Intersection &its, bool shadowRay) const;
 
 private:
+    /*
+    * \brief build bvh tree recursively
+    * return root node of bvh tree
+    * 
+    * \param primitiveIndices
+    *     Indices of primiitives
+    * 
+    * \param start
+    *     First index of primitive of this node
+    * 
+    * \param end 
+    *     1 + Last index of primitive of this node
+    * 
+    * \param nodeCount
+    *     the number of nodes
+    */
+    std::unique_ptr<BVHBuildNode> recursiveBuild(std::vector<uint32_t>& primitiveIndices, uint32_t start, uint32_t end, uint32_t& nodeCount);
+
+    /*
+    * \brief convert bvh binary tree to linear array for faster search
+    * return index of primitive of this node in ordered indices
+    * 
+    * \param node
+    *     Current BVHBuildNode
+    * 
+    * \param nodeIdx
+    *     Current BVHBuildNode's index
+    */
+    uint32_t flattenBVHTree(const std::unique_ptr<BVHBuildNode>& node, uint32_t& nodeIdx);
+
+
+private:
     Mesh         *m_mesh = nullptr; ///< Mesh (only a single one for now)
     BoundingBox3f m_bbox;           ///< Bounding box of the entire scene
+    std::vector<FlatBVHNode> m_BVH_nodes; ///< array of bvh nodes
+    std::vector<uint32_t> m_ordered_indices; ///< ordered indices of mesh primitives
 };
 
 NORI_NAMESPACE_END

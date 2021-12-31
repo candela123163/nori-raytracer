@@ -18,8 +18,81 @@
 
 #include <nori/accel.h>
 #include <Eigen/Geometry>
+#include <stack>
 
 NORI_NAMESPACE_BEGIN
+
+#define BVH_LEAF_MAX_PRIMITIVES 10
+
+
+std::unique_ptr<BVHBuildNode> Accel::recursiveBuild(std::vector<uint32_t>& primitiveIndices, uint32_t start, uint32_t end, uint32_t& nodeCount) {
+    ++nodeCount;
+    auto build_node = std::make_unique<BVHBuildNode>();
+    
+    BoundingBox3f bbox;
+    for (uint32_t i = start; i < end; i++)
+    {
+        uint32_t index = primitiveIndices[i];
+        bbox.expandBy(m_mesh->getBoundingBox(index));
+    }
+
+    int nPrimitives = end - start;
+    // leaf node
+    if (nPrimitives <= BVH_LEAF_MAX_PRIMITIVES || !bbox.isValid()) {
+        int firstPrimOffset = m_ordered_indices.size();
+        for (uint32_t i = start; i < end; i++) {
+            uint32_t index = primitiveIndices[i];
+            m_ordered_indices.push_back(index);
+        }
+        build_node->setLeaf(firstPrimOffset, nPrimitives, bbox);
+    }
+    // interior node
+    else {
+        // try partition with mid pos of boundingbox's largest axis
+        int largestAxis = bbox.getLargestAxis();
+        float axisMidPos = bbox.getCenter()(largestAxis);
+        auto iter = std::partition(
+            primitiveIndices.begin() + start,
+            primitiveIndices.begin() + end,
+            [axisMidPos, largestAxis, this](uint32_t _idx) {
+            return this->m_mesh->getBoundingBox(_idx).getCenter()(largestAxis) < axisMidPos;
+        });
+        int mid = iter - primitiveIndices.begin();
+
+        // partition failed, partition primitives into equally-sized subsets
+        if (mid == start || mid == end) {
+            mid = (start + end) / 2;
+            std::nth_element(
+                primitiveIndices.begin() + start,
+                primitiveIndices.begin() + mid,
+                primitiveIndices.begin() + end,
+                [largestAxis, this](uint32_t _left, uint32_t _right) {
+                return this->m_mesh->getBoundingBox(_left).getCenter()(largestAxis) < this->m_mesh->getBoundingBox(_right).getCenter()(largestAxis);
+            });
+        }
+
+        build_node->setInterior(this->recursiveBuild(primitiveIndices, start, mid, nodeCount),
+            this->recursiveBuild(primitiveIndices, mid, end, nodeCount));
+    }
+    return build_node;
+}
+
+uint32_t Accel::flattenBVHTree(const std::unique_ptr<BVHBuildNode>& node, uint32_t& nodeIdx) {
+    auto& currentNode = m_BVH_nodes[nodeIdx];
+    currentNode.bbox = node->bbox;
+    int currentIdx = nodeIdx++;
+    // leaf node
+    if (node->nPrimitives > 0) {
+        currentNode.primitivesOffset = node->firstPrimOffset;
+        currentNode.nPrimitives = node->nPrimitives;
+    }
+    // interior node
+    else {
+        this->flattenBVHTree(node->left, nodeIdx);
+        currentNode.secondChildOffset = this->flattenBVHTree(node->right, nodeIdx);
+    }
+    return currentIdx;
+}
 
 void Accel::addMesh(Mesh *mesh) {
     if (m_mesh)
@@ -29,7 +102,17 @@ void Accel::addMesh(Mesh *mesh) {
 }
 
 void Accel::build() {
-    /* Nothing to do here for now */
+    m_ordered_indices.clear();
+    std::vector<uint32_t> primitiveIndices(m_mesh->getTriangleCount(), 0);
+    for (uint32_t i = 0; i < primitiveIndices.size(); i++)
+    {
+        primitiveIndices[i] = i;
+    }
+    uint32_t bvhNodeCount = 0;
+    uint32_t flatBVHNodeIdx = 0;
+    auto root = this->recursiveBuild(primitiveIndices, 0, primitiveIndices.size(), bvhNodeCount);
+    m_BVH_nodes.resize(bvhNodeCount);
+    this->flattenBVHTree(root, flatBVHNodeIdx);
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {
@@ -38,21 +121,47 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
 
     Ray3f ray(ray_); /// Make a copy of the ray (we will need to update its '.maxt' value)
 
-    /* Brute force search through all triangles */
-    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx) {
-        float u, v, t;
-        if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
-            /* An intersection was found! Can terminate
-               immediately if this is a shadow ray query */
-            if (shadowRay)
-                return true;
-            ray.maxt = its.t = t;
-            its.uv = Point2f(u, v);
-            its.mesh = m_mesh;
-            f = idx;
-            foundIntersection = true;
+    /* Search in flatten bvh tree */
+    std::stack<uint32_t> travelStack;
+    uint32_t nodeIdx = 0;
+    if (m_BVH_nodes[nodeIdx].bbox.rayIntersect(ray)) {
+        travelStack.push(nodeIdx);
+    }
+    while (!travelStack.empty()) {
+        uint32_t curIdx = travelStack.top();
+        travelStack.pop();
+        const auto& curNode = m_BVH_nodes[curIdx];
+        
+        if (curNode.nPrimitives > 0) {
+            for (uint32_t i = 0; i < curNode.nPrimitives; i++) {
+                uint32_t primitiveIdx = m_ordered_indices[curNode.primitivesOffset + i];
+                float u, v, t;
+                if (m_mesh->rayIntersect(primitiveIdx, ray, u, v, t)) {
+                    /* An intersection was found! Can terminate
+                       immediately if this is a shadow ray query */
+                    if (shadowRay)
+                        return true;
+                    ray.maxt = its.t = t;
+                    its.uv = Point2f(u, v);
+                    its.mesh = m_mesh;
+                    f = primitiveIdx;
+                    foundIntersection = true;
+                }
+            }
+        }
+        else {
+            uint32_t leftChildIdx = curIdx + 1;
+            uint32_t rightChildIdx = curNode.secondChildOffset;
+
+            if (m_BVH_nodes[leftChildIdx].bbox.rayIntersect(ray)) {
+                travelStack.push(leftChildIdx);
+            }
+            if (m_BVH_nodes[rightChildIdx].bbox.rayIntersect(ray)) {
+                travelStack.push(rightChildIdx);
+            }
         }
     }
+
 
     if (foundIntersection) {
         /* At this point, we now know that there is an intersection,
