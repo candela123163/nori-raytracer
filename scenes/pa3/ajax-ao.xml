@@ -5,7 +5,9 @@
 	</sampler>
 
 	<!-- Use the ambient occlusion integrator -->
-    <integrator type="ao"/>
+    <integrator type="ao">
+    	<integer name="sampleCount" value="64"/>
+    </integrator>
 
 	<!-- Load the Ajax bust (a freely available scan from the Jotero forum) -->
 	<mesh type="obj">

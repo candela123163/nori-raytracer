@@ -8,6 +8,7 @@ NORI_NAMESPACE_BEGIN
 class AOIntegrator : public Integrator {
 public:
     AOIntegrator(const PropertyList& props) {
+        m_sampleCount = props.getInteger("sampleCount");
     }
 
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const override {
@@ -16,14 +17,12 @@ public:
             return Color3f(0.0f);
         }
 
-        pcg32 rng;
         float integration = 0.0f;
         Point3f shadePoint = its.p;
         Frame shFrame = its.shFrame;
         for (uint8_t i = 0; i < m_sampleCount; i++)
         {
-            Point2f sample(rng.nextFloat(), rng.nextFloat());
-            Point3f samplePoint = Warp::squareToCosineHemisphere(sample);
+            Point3f samplePoint = Warp::squareToCosineHemisphere(sampler->next2D());
             Vector3f sampleDirWorld = shFrame.toWorld(samplePoint);
             if (scene->rayIntersect(Ray3f(shadePoint, sampleDirWorld, 0.01f, 3.0f))) {
                 continue;
