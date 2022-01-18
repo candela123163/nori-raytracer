@@ -25,15 +25,22 @@ NORI_NAMESPACE_BEGIN
 #define BVH_LEAF_MAX_PRIMITIVES 10
 
 
+Accel::Accel()
+{
+    m_mesh_triangles.push_back(0);
+}
+
 std::unique_ptr<BVHBuildNode> Accel::recursiveBuild(std::vector<uint32_t>& primitiveIndices, uint32_t start, uint32_t end, uint32_t& nodeCount) {
     ++nodeCount;
     auto build_node = std::make_unique<BVHBuildNode>();
     
     BoundingBox3f bbox;
+    size_t localTriangleIdx = 0, leftBound = 0, rightBound = 0;
+
     for (uint32_t i = start; i < end; i++)
     {
-        uint32_t index = primitiveIndices[i];
-        bbox.expandBy(m_mesh->getBoundingBox(index));
+        auto mesh = this->queryMesh(leftBound, rightBound, primitiveIndices[i], localTriangleIdx);
+        bbox.expandBy(mesh->getBoundingBox(localTriangleIdx));
     }
 
     int nPrimitives = end - start;
@@ -51,23 +58,30 @@ std::unique_ptr<BVHBuildNode> Accel::recursiveBuild(std::vector<uint32_t>& primi
         // try partition with mid pos of boundingbox's largest axis
         int largestAxis = bbox.getLargestAxis();
         float axisMidPos = bbox.getCenter()(largestAxis);
+        size_t leftBound = 0, rightBound = 0;
         auto iter = std::partition(
             primitiveIndices.begin() + start,
             primitiveIndices.begin() + end,
-            [axisMidPos, largestAxis, this](uint32_t _idx) {
-            return this->m_mesh->getBoundingBox(_idx).getCenter()(largestAxis) < axisMidPos;
+            [axisMidPos, largestAxis, this, &leftBound, &rightBound](uint32_t _idx) {
+                size_t localTriangleIdx = 0;
+                auto mesh = this->queryMesh(leftBound, rightBound, _idx, localTriangleIdx);
+                return mesh->getBoundingBox(localTriangleIdx).getCenter()(largestAxis) < axisMidPos;
         });
         int mid = iter - primitiveIndices.begin();
 
         // partition failed, partition primitives into equally-sized subsets
         if (mid == start || mid == end) {
             mid = (start + end) / 2;
+            size_t leftBound = 0, rightBound = 0;
             std::nth_element(
                 primitiveIndices.begin() + start,
                 primitiveIndices.begin() + mid,
                 primitiveIndices.begin() + end,
-                [largestAxis, this](uint32_t _left, uint32_t _right) {
-                return this->m_mesh->getBoundingBox(_left).getCenter()(largestAxis) < this->m_mesh->getBoundingBox(_right).getCenter()(largestAxis);
+                [largestAxis, this, &leftBound, &rightBound](uint32_t _left, uint32_t _right) {
+                    size_t leftLocalTriangleIdx = 0, rightLocalTriangleIdx = 0;
+                    auto leftMesh = this->queryMesh(leftBound, rightBound, _left, leftLocalTriangleIdx);
+                    auto rightMesh = this->queryMesh(leftBound, rightBound, _right, rightLocalTriangleIdx);
+                return leftMesh->getBoundingBox(leftLocalTriangleIdx).getCenter()(largestAxis) < rightMesh->getBoundingBox(rightLocalTriangleIdx).getCenter()(largestAxis);
             });
         }
 
@@ -95,15 +109,13 @@ uint32_t Accel::flattenBVHTree(const std::unique_ptr<BVHBuildNode>& node, uint32
 }
 
 void Accel::addMesh(Mesh *mesh) {
-    if (m_mesh)
-        throw NoriException("Accel: only a single mesh is supported!");
-    m_mesh = mesh;
-    m_bbox = m_mesh->getBoundingBox();
+    m_meshes.push_back(mesh);
+    m_mesh_triangles.push_back(mesh->getTriangleCount() + m_mesh_triangles.back());
 }
 
 void Accel::build() {
     m_ordered_indices.clear();
-    std::vector<uint32_t> primitiveIndices(m_mesh->getTriangleCount(), 0);
+    std::vector<uint32_t> primitiveIndices(m_mesh_triangles.back(), 0);
     for (uint32_t i = 0; i < primitiveIndices.size(); i++)
     {
         primitiveIndices[i] = i;
@@ -111,6 +123,7 @@ void Accel::build() {
     uint32_t bvhNodeCount = 0;
     uint32_t flatBVHNodeIdx = 0;
     auto root = this->recursiveBuild(primitiveIndices, 0, primitiveIndices.size(), bvhNodeCount);
+    m_bbox = root->bbox;
     m_BVH_nodes.resize(bvhNodeCount);
     this->flattenBVHTree(root, flatBVHNodeIdx);
 }
@@ -135,19 +148,21 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
             continue;
         }
 
+        size_t localTriangleIdx = 0, leftBound = 0, rightBound = 0;
         if (curNode.nPrimitives > 0) {
             for (uint32_t i = 0; i < curNode.nPrimitives; i++) {
                 uint32_t primitiveIdx = m_ordered_indices[curNode.primitivesOffset + i];
                 float u, v, t;
-                if (m_mesh->rayIntersect(primitiveIdx, ray, u, v, t)) {
+                auto mesh = this->queryMesh(leftBound, rightBound, primitiveIdx, localTriangleIdx);
+                if (mesh->rayIntersect(localTriangleIdx, ray, u, v, t)) {
                     /* An intersection was found! Can terminate
                        immediately if this is a shadow ray query */
                     if (shadowRay)
                         return true;
                     ray.maxt = its.t = t;
                     its.uv = Point2f(u, v);
-                    its.mesh = m_mesh;
-                    f = primitiveIdx;
+                    its.mesh = mesh;
+                    f = localTriangleIdx;
                     foundIntersection = true;
                 }
             }
@@ -237,6 +252,22 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     }
 
     return foundIntersection;
+}
+
+Mesh* Accel::queryMesh(size_t& last_left_bound, size_t& last_right_bound, size_t globalTriangleIdx, size_t& localTriangleIdx) const {
+    if (last_left_bound < 0 || last_right_bound >= m_mesh_triangles.size()
+        || globalTriangleIdx >= m_mesh_triangles[last_right_bound]
+        || globalTriangleIdx < m_mesh_triangles[last_left_bound]) {
+        auto upper = std::upper_bound(m_mesh_triangles.begin(), m_mesh_triangles.end(), globalTriangleIdx);
+        if (upper == m_mesh_triangles.end()) {
+            throw NoriException("Global triangle index out of range, index: %d", globalTriangleIdx);
+        }
+        last_right_bound = upper - m_mesh_triangles.begin();
+        last_left_bound = last_right_bound - 1;
+    }
+    localTriangleIdx = globalTriangleIdx - m_mesh_triangles[last_left_bound];
+
+    return m_meshes[last_left_bound];
 }
 
 NORI_NAMESPACE_END

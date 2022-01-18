@@ -66,6 +66,7 @@ struct FlatBVHNode
  */
 class Accel {
 public:
+    Accel();
     /**
      * \brief Register a triangle mesh for inclusion in the acceleration
      * data structure
@@ -132,9 +133,23 @@ private:
     */
     uint32_t flattenBVHTree(const std::unique_ptr<BVHBuildNode>& node, uint32_t& nodeIdx);
 
+    /*
+    * \brief query mesh by global triangle index
+    * return pointer to result mesh
+    *
+    *
+    * \param globalTriangleIdx
+    *     global triangle index
+    * 
+    * \param localTriangleIdx
+    *     triangle index of queried mesh
+    */
+    Mesh* queryMesh(size_t& last_left_bound, size_t& last_right_bound, size_t globalTriangleIdx, size_t& localTriangleIdx) const;
 
 private:
-    Mesh         *m_mesh = nullptr; ///< Mesh (only a single one for now)
+    //Mesh         *m_mesh = nullptr; ///< Mesh (only a single one for now)
+    std::vector<Mesh*> m_meshes;
+    std::vector<size_t> m_mesh_triangles;   ///< cumulative mesh triangle number(i.e. m_mesh_triangles[0] = 0, m_mesh_triangles[1] = first mesh triangle number
     BoundingBox3f m_bbox;           ///< Bounding box of the entire scene
     std::vector<FlatBVHNode> m_BVH_nodes; ///< array of bvh nodes
     std::vector<uint32_t> m_ordered_indices; ///< ordered indices of mesh primitives
