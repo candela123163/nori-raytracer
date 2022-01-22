@@ -182,15 +182,15 @@ std::string Intersection::toString() const {
 
 Intersection Mesh::sample(const Intersection& ref, const Point2f& sample, float& pdf) const {
     Intersection its;
-
+    Point2f sample_(sample);
     // sample a triangle
     float trianglePdf = 0.0f;
-    size_t triangleIdx = m_dpdf.sample(sample.x(), trianglePdf);
+    size_t triangleIdx = m_dpdf.sampleReuse(sample_.x(), trianglePdf);
     
     // sample on area
-    float sqrtTerm = std::sqrt(1 - sample.x());
+    float sqrtTerm = std::sqrt(1 - sample_.x());
     float alpha = 1 - sqrtTerm;
-    float beta = sample.y() * sqrtTerm;
+    float beta = sample_.y() * sqrtTerm;
     Vector3f bary(1 - alpha - beta, alpha, beta);
 
     // build intersection data
@@ -218,7 +218,7 @@ Intersection Mesh::sample(const Intersection& ref, const Point2f& sample, float&
     float squaredDistance = wi.squaredNorm();
     wi.normalize();
     Vector3f localWi = its.shFrame.toLocal(-wi);
-    pdf *= wi.squaredNorm() / its.shFrame.cosTheta(localWi);
+    pdf *= squaredDistance / its.shFrame.cosTheta(localWi);
     if (std::isinf(pdf)) {
         pdf = 0.0f;
     }

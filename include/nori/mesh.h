@@ -20,8 +20,9 @@
 
 #include <nori/object.h>
 #include <nori/frame.h>
-#include <nori/bbox.h>
 #include <nori/dpdf.h>
+#include <memory>
+#include <nori/bbox.h>
 
 NORI_NAMESPACE_BEGIN
 
