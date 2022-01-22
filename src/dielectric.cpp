@@ -43,7 +43,22 @@ public:
     }
 
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const {
-        throw NoriException("Unimplemented!");
+        bRec.measure = EDiscrete;
+        float reflect = fresnel(Frame::cosTheta(bRec.wi), m_extIOR, m_intIOR);
+        // reflection
+        if (sample.x() < reflect) {
+            bRec.wo = Vector3f(-bRec.wi.x(), -bRec.wi.y(), bRec.wi.z());
+            bRec.eta = 1.0f;
+        }
+        // transmission
+        else {
+            bool entering = Frame::cosTheta(bRec.wi) > 0;
+            bRec.eta = entering ? (m_extIOR / m_intIOR) : (m_intIOR / m_extIOR);
+            if (!refract(bRec.wi, Vector3f(0, 0, 1), bRec.eta, bRec.wo)) {
+                return Color3f(0.0f);
+            }
+        }
+        return Color3f(1.0f);
     }
 
     std::string toString() const {

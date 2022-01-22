@@ -299,4 +299,18 @@ float fresnel(float cosThetaI, float extIOR, float intIOR) {
     return (Rs * Rs + Rp * Rp) / 2.0f;
 }
 
+bool refract(const Vector3f& wi, const Vector3f& n, float eta, Vector3f& wt) {
+    Vector3f faceN = n.dot(wi) > 0 ? n : -n;
+    float cosThetaI = faceN.dot(wi);
+    float sin2ThetaI = std::max(0.0f, 1 - cosThetaI * cosThetaI);
+    float sin2ThetaT = eta * eta * sin2ThetaI;
+    
+    if (sin2ThetaT >= 1) {
+        return false;
+    }
+    float cosThetaT = std::sqrt(1 - sin2ThetaT);
+    wt = eta * -wi + (eta * cosThetaI - cosThetaT) * faceN;
+    return true;
+}
+
 NORI_NAMESPACE_END

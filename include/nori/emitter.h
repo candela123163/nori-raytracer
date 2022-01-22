@@ -22,12 +22,18 @@
 
 NORI_NAMESPACE_BEGIN
 
+struct Intersection;
+class VisibilityTester;
+struct BSDFQueryRecord;
 /**
  * \brief Superclass of all emitters
  */
 class Emitter : public NoriObject {
 public:
-
+    virtual Color3f Li(const Intersection& its, const Vector3f& w) const { return Color3f(0.0f); }
+    virtual Color3f SampleLi(const Intersection& ref, const Point2f& sample, BSDFQueryRecord& bRec, float& pdf, VisibilityTester& vis) const = 0;
+    virtual float PdfLi(const Intersection& ref, const Vector3f& wo) const = 0;
+    
     /**
      * \brief Return the type of object (i.e. Mesh/Emitter/etc.) 
      * provided by this instance
