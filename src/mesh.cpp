@@ -22,10 +22,23 @@
 #include <nori/emitter.h>
 #include <nori/warp.h>
 #include <Eigen/Geometry>
+#include <nori/accel.h>
+#include <nori/scene.h>
 
 NORI_NAMESPACE_BEGIN
 
-Mesh::Mesh() { }
+Color3f Intersection::Le(const Vector3f& wi) const {
+    const Emitter* area = mesh->getEmitter();
+    return area ? area->Li(*this, wi) : Color3f(0.0f);
+}
+
+bool VisibilityTester::Unoccluded(const Scene& scene) const {
+    return !scene.rayIntersect(p0.SpawnRayTo(p1));
+}
+
+Mesh::Mesh() { 
+    m_accel = std::make_unique<Accel>();
+}
 
 Mesh::~Mesh() {
     delete m_bsdf;
@@ -38,6 +51,9 @@ void Mesh::activate() {
         m_bsdf = static_cast<BSDF *>(
             NoriObjectFactory::createInstance("diffuse", PropertyList()));
     }
+    m_accel->addMesh(this);
+    m_accel->build();
+    this->initDPdf();
 }
 
 float Mesh::surfaceArea(uint32_t index) const {
@@ -162,6 +178,79 @@ std::string Intersection::toString() const {
         indent(geoFrame.toString()),
         mesh ? mesh->toString() : std::string("null")
     );
+}
+
+Intersection Mesh::sample(const Intersection& ref, const Point2f& sample, float& pdf) const {
+    Intersection its;
+    Point2f sample_(sample);
+    // sample a triangle
+    float trianglePdf = 0.0f;
+    size_t triangleIdx = m_dpdf.sampleReuse(sample_.x(), trianglePdf);
+    
+    // sample on area
+    float sqrtTerm = std::sqrt(1 - sample_.x());
+    float alpha = 1 - sqrtTerm;
+    float beta = sample_.y() * sqrtTerm;
+    Vector3f bary(1 - alpha - beta, alpha, beta);
+
+    // build intersection data
+    uint32_t idx0 = m_F(0, triangleIdx), idx1 = m_F(1, triangleIdx), idx2 = m_F(2, triangleIdx);
+    Point3f p0 = m_V.col(idx0), p1 = m_V.col(idx1), p2 = m_V.col(idx2);
+    its.p = bary.x() * p0 + bary.y() * p1 + bary.z() * p2;
+    its.geoFrame = Frame((p1 - p0).cross(p2 - p0).normalized());
+    if (m_N.size() > 0) {
+        its.shFrame = Frame(
+            (bary.x() * m_N.col(idx0) +
+             bary.y() * m_N.col(idx1) +
+             bary.z() * m_N.col(idx2)).normalized());
+    }
+    else {
+        its.shFrame = its.geoFrame;
+    }
+    its.mesh = this;
+    its.triangleIdx = triangleIdx;
+
+    // calculate pdf
+    float areaPdf = 1.0f / this->surfaceArea(triangleIdx);
+    pdf = trianglePdf * areaPdf;
+    // convert from area measure to solid angle measure
+    Vector3f wi = its.p - ref.p;
+    float squaredDistance = wi.squaredNorm();
+    wi.normalize();
+    Vector3f localWi = its.shFrame.toLocal(-wi);
+    pdf *= squaredDistance / its.shFrame.cosTheta(localWi);
+    if (std::isinf(pdf)) {
+        pdf = 0.0f;
+    }
+
+    return its;
+}
+
+float Mesh::pdf(const Intersection& ref, const Vector3f& wi) const {
+    Ray3f ray = ref.SpawnRay(wi);
+    Intersection its;
+    if (!m_accel->rayIntersect(ray, its, false)) {
+        return 0.0f;
+    }
+    float trianglePdf = m_dpdf[its.triangleIdx];
+    float areaPdf = 1.0f / this->surfaceArea(its.triangleIdx);
+    float pdf = trianglePdf * areaPdf;
+    Vector3f localWi = its.shFrame.toLocal(-wi);
+    pdf *= (ref.p - its.p).squaredNorm() / its.shFrame.cosTheta(localWi);
+    if (std::isinf(pdf)) {
+        pdf = 0.0f;
+    }
+    return pdf;
+}
+
+void Mesh::initDPdf() {
+    m_dpdf.clear();
+    m_dpdf.reserve(this->getTriangleCount());
+    for (size_t i = 0; i < this->getTriangleCount(); i++)
+    {
+        m_dpdf.append(this->surfaceArea(i));
+    }
+    m_dpdf.normalize();
 }
 
 NORI_NAMESPACE_END

@@ -21,6 +21,8 @@
 #include <nori/object.h>
 #include <nori/frame.h>
 #include <nori/bbox.h>
+#include <nori/dpdf.h>
+#include <memory>
 
 NORI_NAMESPACE_BEGIN
 
@@ -45,6 +47,8 @@ struct Intersection {
     Frame geoFrame;
     /// Pointer to the associated mesh
     const Mesh *mesh;
+    /// index of triangle
+    size_t triangleIdx;
 
     /// Create an uninitialized intersection record
     Intersection() : mesh(nullptr) { }
@@ -61,6 +65,30 @@ struct Intersection {
 
     /// Return a human-readable summary of the intersection record
     std::string toString() const;
+
+    Ray3f SpawnRay(const Vector3f& d) const {
+        return Ray3f(p, d);
+    }
+
+    Ray3f SpawnRayTo(const Point3f& p2) const {
+        return Ray3f(p, p2 - p, Epsilon, 1 - Epsilon);
+    }
+
+    Ray3f SpawnRayTo(const Intersection& its) const {
+        return SpawnRayTo(its.p);
+    }
+
+    Color3f Le(const Vector3f& wi) const;
+};
+
+class VisibilityTester {
+public:
+    VisibilityTester() {}
+    VisibilityTester(const Intersection& p0_, const Intersection& p1_)
+        :p0(p0_), p1(p1_) {}
+    bool Unoccluded(const Scene& scene) const;
+private:
+    Intersection p0, p1;
 };
 
 /**
@@ -163,9 +191,15 @@ public:
      * */
     EClassType getClassType() const { return EMesh; }
 
+    Intersection sample(const Intersection& ref, const Point2f& sample, float& pdf) const;
+
+    float pdf(const Intersection& ref, const Vector3f& wi) const;
+
 protected:
     /// Create an empty mesh
     Mesh();
+
+    void initDPdf();
 
 protected:
     std::string m_name;                  ///< Identifying name
@@ -176,6 +210,8 @@ protected:
     BSDF         *m_bsdf = nullptr;      ///< BSDF of the surface
     Emitter    *m_emitter = nullptr;     ///< Associated emitter, if any
     BoundingBox3f m_bbox;                ///< Bounding box of the mesh
+    DiscretePDF m_dpdf;
+    std::unique_ptr<Accel> m_accel;
 };
 
 NORI_NAMESPACE_END

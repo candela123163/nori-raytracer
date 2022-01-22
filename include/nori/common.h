@@ -59,6 +59,8 @@
 #define SQRT_TWO     1.41421356237309504880f
 #define INV_SQRT_TWO 0.70710678118654752440f
 
+#define BVH_LEAF_MAX_PRIMITIVES 10
+
 /* Forward declarations */
 namespace filesystem {
     class path;
@@ -134,6 +136,7 @@ class PhaseFunction;
 class ReconstructionFilter;
 class Sampler;
 class Scene;
+class Accel;
 
 /// Import cout, cerr, endl for debugging purposes
 using std::cout;
@@ -256,6 +259,9 @@ extern Point2f sphericalCoordinates(const Vector3f &dir);
  *      Refractive index of the interior
  */
 extern float fresnel(float cosThetaI, float extIOR, float intIOR);
+
+
+extern bool refract(const Vector3f& wi, const Vector3f& n, float eta, Vector3f& wt);
 
 /**
  * \brief Return the global file resolver instance

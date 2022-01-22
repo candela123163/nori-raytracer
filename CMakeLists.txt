@@ -91,6 +91,8 @@ add_executable(nori
   src/normal.cpp
   src/simple.cpp
   src/ao.cpp
+  src/areaLight.cpp
+  src/whitted.cpp
 )
 
 add_definitions(${NANOGUI_EXTRA_DEFS})
