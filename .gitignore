@@ -28,5 +28,4 @@ x64
 *.exr
 *.png
 ajax.obj
-/chitest.m
-
+*.m

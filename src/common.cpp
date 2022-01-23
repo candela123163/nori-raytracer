@@ -313,4 +313,8 @@ bool refract(const Vector3f& wi, const Vector3f& n, float eta, Vector3f& wt) {
     return true;
 }
 
+Vector3f reflect(const Vector3f& wi, const Vector3f& wh) {
+    return 2 * wh * wh.dot(wi) - wi;
+}
+
 NORI_NAMESPACE_END

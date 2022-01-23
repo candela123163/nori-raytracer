@@ -260,8 +260,9 @@ extern Point2f sphericalCoordinates(const Vector3f &dir);
  */
 extern float fresnel(float cosThetaI, float extIOR, float intIOR);
 
-
 extern bool refract(const Vector3f& wi, const Vector3f& n, float eta, Vector3f& wt);
+
+extern Vector3f reflect(const Vector3f& wi, const Vector3f& wh);
 
 /**
  * \brief Return the global file resolver instance

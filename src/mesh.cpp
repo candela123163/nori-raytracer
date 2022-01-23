@@ -219,7 +219,7 @@ Intersection Mesh::sample(const Intersection& ref, const Point2f& sample, float&
     wi.normalize();
     Vector3f localWi = its.shFrame.toLocal(-wi);
     pdf *= squaredDistance / its.shFrame.cosTheta(localWi);
-    if (std::isinf(pdf)) {
+    if (std::isinf(pdf) || pdf <= 0.0f) {
         pdf = 0.0f;
     }
 

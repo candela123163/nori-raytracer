@@ -14,7 +14,7 @@ public:
 
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const override {
         Color3f L(0.0f);
-        Color3f f = 1.0f;
+        Color3f beta(1.0f);
         Intersection its;
         Ray3f ray_(ray);
         int depth = 0;
@@ -46,7 +46,7 @@ public:
                     }
                     Color3f weight = bsdf->eval(record);
                     if (!weight.isZero() && vis.Unoccluded(*scene)) {
-                        L += weight * Li * Frame::cosTheta(record.wo) / pdf;
+                        L += weight * Li * std::max(0.0f, Frame::cosTheta(record.wo)) / pdf;
                     }
                 }
                 break;
@@ -55,13 +55,13 @@ public:
             else {
                 Color3f weight = bsdf->sample(record, sampler->next2D());
                 if (!weight.isZero()) {
-                    f *= weight;
+                    beta *= weight;
                     ray_ = its.SpawnRay(its.toWorld(record.wo));
                 }
             }
         }
 
-        return L * f;
+        return L * beta;
     }
 
     std::string toString() const override {
