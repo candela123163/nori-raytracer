@@ -6,9 +6,9 @@
 
 NORI_NAMESPACE_BEGIN
 
-class PathEmitterSampleIntegrator : public Integrator {
+class PathMultiImportanceSampleIntegrator : public Integrator {
 public:
-    PathEmitterSampleIntegrator(const PropertyList& props) {
+    PathMultiImportanceSampleIntegrator(const PropertyList& props) {
         m_maxDepth = props.getInteger("max_depth", 128);
     }
 
@@ -20,7 +20,7 @@ public:
         int depth = 0;
         bool specularBounce = false;
 
-        while(depth < m_maxDepth)
+        while (depth < m_maxDepth)
         {
             // miss
             if (!scene->rayIntersect(ray_, its)) {
@@ -38,24 +38,9 @@ public:
 
             BSDFQueryRecord record(its.wi);
 
-            // do direct illumination by sampling light
+            // MIS
             if (bsdf->isDiffuse()) {
-                // uniformally sample one light
-                size_t lightCount = scene->getEmitters().size();
-                size_t lightIndex = std::min(lightCount - 1, static_cast<size_t>(sampler->next1D() * lightCount));
-                const Emitter* emitter = scene->getEmitters()[lightIndex];
-                float lightPdf = 1.0f / lightCount;
-
-                float pdf = 0.0f;
-                VisibilityTester vis;
-                Color3f Li = emitter->SampleLi(its, sampler->next2D(), record, pdf, vis);
-                if (!Li.isZero() && pdf > 0.0f)
-                {
-                    Color3f weight = bsdf->eval(record) * std::max(0.0f, Frame::cosTheta(record.wo)) / (pdf * lightPdf);
-                    if (!weight.isZero() && vis.Unoccluded(*scene)) {
-                        L += weight * Li * beta;
-                    }
-                }
+                L += beta * uniformSampleOneLight(its, *scene, *sampler);
             }
 
             // sample by bsdf
@@ -65,7 +50,7 @@ public:
             }
             beta *= weight;
             specularBounce = record.measure == EDiscrete;
-            
+
             // russian roulette
             if (depth > 3) {
                 float continue_probability = std::min(0.99f, beta.maxCoeff());
@@ -83,13 +68,13 @@ public:
     }
 
     std::string toString() const override {
-        return "PathEmitterSampleIntegrator []";
+        return "PathMultiImportanceSampleIntegrator []";
     }
 
 private:
     int m_maxDepth = 128;
 };
 
-NORI_REGISTER_CLASS(PathEmitterSampleIntegrator, "path_ems");
+NORI_REGISTER_CLASS(PathMultiImportanceSampleIntegrator, "path_mis");
 
 NORI_NAMESPACE_END

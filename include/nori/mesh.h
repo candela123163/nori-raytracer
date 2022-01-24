@@ -49,6 +49,8 @@ struct Intersection {
     const Mesh *mesh;
     /// index of triangle
     size_t triangleIdx;
+    /// incident direction in local frame
+    Vector3f wi;
 
     /// Create an uninitialized intersection record
     Intersection() : mesh(nullptr) { }
@@ -193,7 +195,7 @@ public:
 
     Intersection sample(const Intersection& ref, const Point2f& sample, float& pdf) const;
 
-    float pdf(const Intersection& ref, const Vector3f& wi) const;
+    float pdf(const Intersection& ref, const Vector3f& wo) const;
 
 protected:
     /// Create an empty mesh

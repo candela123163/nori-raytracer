@@ -22,9 +22,6 @@
 
 NORI_NAMESPACE_BEGIN
 
-struct Intersection;
-class VisibilityTester;
-struct BSDFQueryRecord;
 /**
  * \brief Superclass of all emitters
  */

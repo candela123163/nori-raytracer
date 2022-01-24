@@ -209,7 +209,7 @@ Intersection Mesh::sample(const Intersection& ref, const Point2f& sample, float&
     }
     its.mesh = this;
     its.triangleIdx = triangleIdx;
-
+    
     // calculate pdf
     float areaPdf = 1.0f / this->surfaceArea(triangleIdx);
     pdf = trianglePdf * areaPdf;
@@ -217,8 +217,8 @@ Intersection Mesh::sample(const Intersection& ref, const Point2f& sample, float&
     Vector3f wi = its.p - ref.p;
     float squaredDistance = wi.squaredNorm();
     wi.normalize();
-    Vector3f localWi = its.shFrame.toLocal(-wi);
-    pdf *= squaredDistance / its.shFrame.cosTheta(localWi);
+    its.wi = its.toLocal(-wi);
+    pdf *= squaredDistance / its.shFrame.cosTheta(its.wi);
     if (std::isinf(pdf) || pdf <= 0.0f) {
         pdf = 0.0f;
     }
@@ -226,8 +226,8 @@ Intersection Mesh::sample(const Intersection& ref, const Point2f& sample, float&
     return its;
 }
 
-float Mesh::pdf(const Intersection& ref, const Vector3f& wi) const {
-    Ray3f ray = ref.SpawnRay(wi);
+float Mesh::pdf(const Intersection& ref, const Vector3f& wo) const {
+    Ray3f ray = ref.SpawnRay(wo);
     Intersection its;
     if (!m_accel->rayIntersect(ray, its, false)) {
         return 0.0f;
@@ -235,9 +235,9 @@ float Mesh::pdf(const Intersection& ref, const Vector3f& wi) const {
     float trianglePdf = m_dpdf[its.triangleIdx];
     float areaPdf = 1.0f / this->surfaceArea(its.triangleIdx);
     float pdf = trianglePdf * areaPdf;
-    Vector3f localWi = its.shFrame.toLocal(-wi);
+    Vector3f localWi = its.shFrame.toLocal(-wo);
     pdf *= (ref.p - its.p).squaredNorm() / its.shFrame.cosTheta(localWi);
-    if (std::isinf(pdf)) {
+    if (std::isinf(pdf)  || pdf <= 0.0f) {
         pdf = 0.0f;
     }
     return pdf;

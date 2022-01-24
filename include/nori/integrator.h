@@ -58,6 +58,21 @@ public:
      * provided by this instance
      * */
     EClassType getClassType() const { return EIntegrator; }
+
+    static float powerHeuristic(int nf, float fPdf, int ng, float gPdf);
+
+    static float balanceHeuristic(int nf, float fPdf, int ng, float gPdf);
+
+    static Color3f uniformSampleOneLight(
+        const Intersection& its,
+        const Scene& scene,
+        Sampler& sampler);
+
+    static Color3f estimateDirect(
+        const Intersection& its,
+        const Scene& scene,
+        Sampler& sampler,
+        const Emitter& emitter);
 };
 
 NORI_NAMESPACE_END

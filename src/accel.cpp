@@ -244,6 +244,9 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
         } else {
             its.shFrame = its.geoFrame;
         }
+
+        // set incident direction
+        its.wi = its.toLocal(-ray_.d.normalized());
     }
 
     return foundIntersection;

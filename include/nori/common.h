@@ -137,6 +137,9 @@ class ReconstructionFilter;
 class Sampler;
 class Scene;
 class Accel;
+struct Intersection;
+class VisibilityTester;
+struct BSDFQueryRecord;
 
 /// Import cout, cerr, endl for debugging purposes
 using std::cout;
