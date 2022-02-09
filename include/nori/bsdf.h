@@ -32,7 +32,7 @@ struct BSDFQueryRecord {
 
     /// Outgoing direction (in the local frame)
     Vector3f wo;
-
+    Vector3f wh;
     /// Relative refractive index in the sampled direction
     float eta;
 

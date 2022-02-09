@@ -97,6 +97,7 @@ add_executable(nori
   src/path_ems.cpp
   src/path_mis.cpp
   src/integrator.cpp
+  src/rough_dielectric.cpp
 )
 
 add_definitions(${NANOGUI_EXTRA_DEFS})

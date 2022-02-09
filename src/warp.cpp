@@ -94,9 +94,9 @@ float Warp::squareToCosineHemispherePdf(const Vector3f &v) {
 
 Vector3f Warp::squareToBeckmann(const Point2f &sample, float alpha) {
     float phi = 2 * M_PI * sample.x();
-    float tan2Theta = -alpha * alpha * std::log(sample.y());
+    float tan2Theta = -alpha * alpha * std::log(1.0 - sample.y());
     float cosTheta = 1.0f / std::sqrt(1.0f + tan2Theta);
-    float sinTheta = std::sqrt(1.0f - cosTheta * cosTheta);
+    float sinTheta = std::sqrt(std::max(0.0f, 1.0f - cosTheta * cosTheta));
     return { sinTheta * std::cos(phi), sinTheta * std::sin(phi), cosTheta };
 }
 

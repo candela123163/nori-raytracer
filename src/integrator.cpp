@@ -34,7 +34,7 @@ Color3f Integrator::estimateDirect(const Intersection& its, const Scene& scene, 
 	// sample light
 	Color3f Li = emitter.SampleLi(its, sampler.next2D(), record, lightPdf, vis);
 	if (lightPdf > 0.0f && !Li.isZero()) {
-		Color3f f = bsdf->eval(record) * std::max(0.0f, Frame::cosTheta(record.wo));
+		Color3f f = bsdf->eval(record) * std::abs(Frame::cosTheta(record.wo));
 		scatteringPdf = bsdf->pdf(record);
 		if (scatteringPdf > 0.0f && !f.isZero() && vis.Unoccluded(scene)) {
 			float weight = powerHeuristic(1, lightPdf, 1, scatteringPdf);
@@ -45,7 +45,6 @@ Color3f Integrator::estimateDirect(const Intersection& its, const Scene& scene, 
 	// sample bsdf
 	Color3f f = bsdf->sample(record, sampler.next2D());
 	scatteringPdf = bsdf->pdf(record);
-	f *= scatteringPdf;
 	if (scatteringPdf > 0.0f && !f.isZero()) {
 		Vector3f worldWo = its.toWorld(record.wo);
 		lightPdf = emitter.PdfLi(its, worldWo);
@@ -57,7 +56,7 @@ Color3f Integrator::estimateDirect(const Intersection& its, const Scene& scene, 
 					Color3f Li = it.Le(-worldWo);
 					if (!Li.isZero()) {
 						float weight = powerHeuristic(1, scatteringPdf, 1, lightPdf);
-						Ld += f * Li * weight / scatteringPdf;
+						Ld += f * Li * weight;
 					}
 				}
 			}

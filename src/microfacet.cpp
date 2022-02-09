@@ -128,7 +128,7 @@ public:
 
         bRec.measure = ESolidAngle;        
         float pdf = this->pdf(bRec);
-        if(pdf == 0){
+        if (pdf <= 0) {
             return Color3f(0.0f);
         }
         return this->eval(bRec) * std::max(0.0f, Frame::cosTheta(bRec.wo)) / pdf;
