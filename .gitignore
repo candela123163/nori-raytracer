@@ -26,6 +26,5 @@ rules.ninja
 Debug
 x64
 *.exr
-*.png
 ajax.obj
 *.m

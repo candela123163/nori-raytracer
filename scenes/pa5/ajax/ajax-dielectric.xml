@@ -1,17 +1,17 @@
 <scene>
 	<!-- Independent sample generator, 64 samples per pixel -->
 	<sampler type="independent">
-		<integer name="sampleCount" value="64"/>
+		<integer name="sampleCount" value="1024"/>
 	</sampler>
 
 	<!-- Use the simple point light integrator -->
-    <integrator type="whitted"/>
+    <integrator type="path_mats"/>
 
 	<!-- Load the Ajax bust (a freely available scan from the Jotero forum) -->
 	<mesh type="obj">
 		<string name="filename" value="../../pa2/ajax.obj"/>
 
-		<bsdf type="microfacet">
+		<bsdf type="dielectric">
             <float name="intIOR" value="1.7"/>
             <color name="kd" value="0.2 0.2 0.4"/>
             <float name="alpha" value="0.08"/>
